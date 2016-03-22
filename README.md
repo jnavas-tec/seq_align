@@ -157,7 +157,7 @@ Needleman-Wunsch
             --nogapsin2          No gaps allowed within the second sequence
             --nogaps             No gaps allowed in either sequence
             --nomismatches       No mismatches allowed (cannot be used with --nogaps..)
-            --strpe <width>      Compute only a band of specified width
+            --stripe <width>     Compute only a band of specified width
 
          DETAILS:
           * For help choosing scoring, see the README file. 
