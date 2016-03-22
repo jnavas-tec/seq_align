@@ -84,7 +84,12 @@ static void align(const char *seq_a, const char *seq_b,
     fflush(stdout);
     return;
   }
-
+	
+  if (cmd->stripe)
+  {
+	needleman_wunsch_striped(seq_a, seq_b, &scoring, nw, result, cmd->stripe_dimension);
+  }
+  else	
   needleman_wunsch_align(seq_a, seq_b, &scoring, nw, result);
 
   if(cmd->print_matrices)
@@ -167,7 +172,8 @@ int main(int argc, char* argv[])
   // Align!
   nw = needleman_wunsch_new();
   result = alignment_create(256);
-
+  
+  
   if(cmd->seq1 != NULL)
   {
     // Align seq1 and seq2 pair passed on the command line

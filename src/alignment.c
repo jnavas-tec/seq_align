@@ -172,6 +172,154 @@ static void alignment_fill_matrices(aligner_t *aligner, char is_sw)
   }
 }
 
+static void alignment_stripe_fill_matrices(aligner_t *aligner, unsigned int k){
+  score_t *match_scores = aligner->match_scores;
+  score_t *gap_a_scores = aligner->gap_a_scores;
+  score_t *gap_b_scores = aligner->gap_b_scores;
+  const scoring_t *scoring = aligner->scoring;
+  size_t score_width = aligner->score_width;
+  size_t score_height = aligner->score_height;
+
+  size_t i, j;
+
+  const score_t min = SCORE_MIN;
+
+  size_t len_i = score_width-1, len_j = score_height-1;
+  size_t index, index_left, index_up, index_upleft;
+  bool first = true;
+  int small, seq_i, seq_j;
+
+  // [0][0]
+  match_scores[0] = 0;
+  gap_a_scores[0] = 0;
+  gap_b_scores[0] = 0;
+	
+  // work along first row -> [i][0]
+    for(i = 1; i <= k; i++)
+    {
+      match_scores[i] = min;
+
+      // Think carefully about which way round these are
+      gap_a_scores[i] = min;
+      gap_b_scores[i] = scoring->no_start_gap_penalty ? 0
+                        : scoring->gap_open + (long)i * scoring->gap_extend;
+    }
+
+    // work down first column -> [0][j]
+    for(j = 1, index = score_width; j <= k; j++, index += score_width)
+    {
+      match_scores[index] = min;
+
+      // Think carefully about which way round these are
+      gap_a_scores[index] = scoring->no_start_gap_penalty ? 0
+                            : scoring->gap_open + (long)j * scoring->gap_extend;
+      gap_b_scores[index] = min;
+    }
+
+  // These are longs to force addition to be done with higher accuracy
+  long gap_open_penalty = scoring->gap_extend + scoring->gap_open;
+  long gap_extend_penalty = scoring->gap_extend;
+  long substitution_penalty;
+
+  // start at position [1][1]
+  index_upleft = 0;
+  index_up = 1;
+  index_left = score_width;
+  index = score_width+1;
+  
+  for(seq_j = 0; seq_j < len_j; seq_j++)
+  {
+    int bnd = seq_j - k;
+    for(seq_i = MAX2(bnd, 0); seq_i < (small = MIN2(len_i , seq_j + k + 1 )) ; seq_i++)
+    {
+//	printf ("bnd = %d seq i = %d min = %d", bnd, seq_i, small);
+        // Update match_scores[i][j] with position [i-1][j-1]
+        // substitution penalty
+        bool is_match;
+        int tmp_penalty;
+	if (first) {
+	  index += seq_i;
+	  index_left = index - 1;
+	  index_up = index - score_width;
+	  index_upleft = index_up - 1;
+	  first = false;
+	}
+
+        scoring_lookup(scoring, aligner->seq_a[seq_i], aligner->seq_b[seq_j],
+                       &tmp_penalty, &is_match);
+
+        if(scoring->no_mismatches && !is_match)
+        {
+          match_scores[index] = min;
+        }
+        else
+        {
+          substitution_penalty = tmp_penalty; // cast to long
+
+          // substitution
+          // 1) continue alignment
+          // 2) close gap in seq_a
+          // 3) close gap in seq_b
+          match_scores[index]
+            = MAX4(match_scores[index_upleft] + substitution_penalty,
+                   gap_a_scores[index_upleft] + substitution_penalty,
+                   gap_b_scores[index_upleft] + substitution_penalty,
+                   min);
+        }
+
+        // Long arithmetic since some INTs are set to min and penalty is -ve
+        // (adding as ints would cause an integer overflow)
+
+        // Update gap_a_scores[i][j] from position [i][j-1]
+        if(seq_i == len_i-1 && scoring->no_end_gap_penalty)
+        {
+          gap_a_scores[index] = MAX3(match_scores[index_up],
+                                     gap_a_scores[index_up],
+                                     gap_b_scores[index_up]);
+        }
+        else if(!scoring->no_gaps_in_a || seq_i == len_i-1)
+        {
+          gap_a_scores[index]
+            = MAX4(match_scores[index_up] + gap_open_penalty,
+                   gap_a_scores[index_up] + gap_extend_penalty,
+                   gap_b_scores[index_up] + gap_open_penalty,
+                   min);
+        }
+        else
+          gap_a_scores[index] = min;
+
+        // Update gap_b_scores[i][j] from position [i-1][j]
+        if(seq_j == len_j-1 && scoring->no_end_gap_penalty)
+        {
+          gap_b_scores[index] = MAX3(match_scores[index_left],
+                                     gap_a_scores[index_left],
+                                     gap_b_scores[index_left]);
+        }
+        else if(!scoring->no_gaps_in_b || seq_j == len_j-1)
+        {
+          gap_b_scores[index]
+            = MAX4(match_scores[index_left] + gap_open_penalty,
+                   gap_a_scores[index_left] + gap_open_penalty,
+                   gap_b_scores[index_left] + gap_extend_penalty,
+                   min);
+        }
+        else
+          gap_b_scores[index] = min;
+     
+      index++;
+      index_left++;
+      index_up++;
+      index_upleft++;
+    }
+
+    index_left = (score_width)*(seq_j + 2);
+    index = index_left + 1;
+    index_upleft = (score_width) * (seq_j+1);
+    index_up = index_upleft + 1;
+    first = true;
+  }
+}	
+
 void aligner_align(aligner_t *aligner,
                    const char *seq_a, const char *seq_b,
                    size_t len_a, size_t len_b,
@@ -195,6 +343,32 @@ void aligner_align(aligner_t *aligner,
   }
 
   alignment_fill_matrices(aligner, is_sw);
+}
+
+
+void aligner_striped_align(aligner_t *aligner,
+                   const char *seq_a, const char *seq_b,
+                   size_t len_a, size_t len_b,
+                   const scoring_t *scoring, unsigned int k)
+{
+  aligner->scoring = scoring;
+  aligner->seq_a = seq_a;
+  aligner->seq_b = seq_b;
+  aligner->score_width = len_a+1;
+  aligner->score_height = len_b+1;
+
+  size_t new_capacity = aligner->score_width * aligner->score_height;
+
+  if(aligner->capacity < new_capacity)
+  {
+    aligner->capacity = ROUNDUP2POW(new_capacity);
+    size_t mem = sizeof(score_t) * aligner->capacity;
+    aligner->match_scores = realloc(aligner->match_scores, mem);
+    aligner->gap_a_scores = realloc(aligner->gap_a_scores, mem);
+    aligner->gap_b_scores = realloc(aligner->gap_b_scores, mem);
+  }
+
+  alignment_stripe_fill_matrices(aligner, k);					   
 }
 
 void aligner_destroy(aligner_t *aligner)

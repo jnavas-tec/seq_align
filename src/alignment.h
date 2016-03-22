@@ -10,6 +10,7 @@
 
 #include <string.h> // memset
 #include "alignment_scoring.h"
+#include "stdio.h"
 
 #ifndef ROUNDUP2POW
   #define ROUNDUP2POW(x) (0x1UL << (64 - __builtin_clzl(x)))
@@ -52,6 +53,10 @@ void aligner_align(aligner_t *aligner,
                    const char *seq_a, const char *seq_b,
                    size_t len_a, size_t len_b,
                    const scoring_t *scoring, char is_sw);
+void aligner_striped_align(aligner_t *aligner,
+                   const char *seq_a, const char *seq_b,
+                   size_t len_a, size_t len_b,
+                   const scoring_t *scoring, unsigned int k);
 void aligner_destroy(aligner_t *aligner);
 
 // Constructors/Destructors for alignment

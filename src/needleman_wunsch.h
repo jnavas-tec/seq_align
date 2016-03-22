@@ -30,6 +30,10 @@ void needleman_wunsch_align2(const char *a, const char *b,
                              size_t len_a, size_t len_b,
                              const scoring_t *scoring,
                              nw_aligner_t *nw, alignment_t *result);
+							 
+void needleman_wunsch_striped(const char *a, const char *b,
+                             const scoring_t *scoring, nw_aligner_t *nw, 
+							 alignment_t *result, int k);
 
 #ifdef __cplusplus
 }

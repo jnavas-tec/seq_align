@@ -131,6 +131,7 @@ static void print_usage(enum SeqAlignCmdType cmd_type, score_t defaults[4],
     // NW specific
     fprintf(stderr,
 "\n"
+"    --stripe <dimension> Do a Needleman-Wunsch alignement with a stripe of specified dimension\n"
 "    --freestartgap       No penalty for gap at start of alignment\n"
 "    --freeendgap         No penalty for gap at end of alignment\n"
 "\n"
@@ -374,6 +375,17 @@ cmdline_t* cmdline_new(int argc, char **argv, scoring_t *scoring,
 
         cmd->min_score_set = true;
 
+        argi++;
+      }
+      else if(strcasecmp(argv[argi], "--stripe") == 0)
+      {
+        if(cmd_type != SEQ_ALIGN_NW_CMD)
+          usage("--stripe only valid with Needleman-Wunsch");
+         if(!parse_entire_int(argv[argi+1], &cmd->stripe_dimension))
+          usage("Invalid stripe dimension");
+          
+        cmd->stripe = true;
+        
         argi++;
       }
       else if(strcasecmp(argv[argi], "--maxhits") == 0)

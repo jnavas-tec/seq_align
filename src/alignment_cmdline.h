@@ -50,6 +50,10 @@ typedef struct
   // Experimental
   bool no_gaps_in1, no_gaps_in2;
   bool no_mismatches;
+  
+  // New stripe function
+  bool stripe;
+  int stripe_dimension;
 
   // Pair of sequences to align
   const char *seq1, *seq2;
